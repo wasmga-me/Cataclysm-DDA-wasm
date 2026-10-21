@@ -698,8 +698,9 @@ ifeq ($(NATIVE), emscripten)
   LDFLAGS += -sMAX_WEBGL_VERSION=2
 
   ifeq ($(RELEASE), 1)
-    # Release-mode Linker flags.
-    LDFLAGS += -Os
+    # Release-mode Linker flags. -O1: with Asyncify, an -Os or -O2 link's
+    # wasm-opt runs past three hours on four cores.
+    LDFLAGS += -O1
     LDFLAGS += -sLZ4
   else
     # Debug mode linker flags.
