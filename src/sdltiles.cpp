@@ -2314,7 +2314,10 @@ void draw_quick_shortcuts()
 {
 
     if( !quick_shortcuts_enabled ||
+#if defined(__ANDROID__)
+        // The on-screen keyboard is up. (Browsers keep text input on with a hardware keyboard.)
         SDL_IsTextInputActive() ||
+#endif
         ( get_option<bool>( "ANDROID_HIDE_HOLDS" ) && !is_quick_shortcut_touch && finger_down_time > 0 &&
           SDL_GetTicks() - finger_down_time >= static_cast<uint32_t>(
               get_option<int>( "ANDROID_INITIAL_DELAY" ) ) ) ) { // player is swipe + holding in a direction
