@@ -386,7 +386,7 @@ static const zone_type_id zone_type_NO_AUTO_PICKUP( "NO_AUTO_PICKUP" );
 
 static constexpr int DANGEROUS_PROXIMITY = 5;
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
 extern bool add_key_to_quick_shortcuts( int key, const std::string &category, bool back ); // NOLINT
 #endif
 
@@ -2234,7 +2234,7 @@ int game::inventory_item_menu( item_location locThisItem,
 
     item &oThisItem = *locThisItem;
     if( u.has_item( oThisItem ) ) {
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
         if( get_option<bool>( "ANDROID_INVENTORY_AUTOADD" ) ) {
             add_key_to_quick_shortcuts( oThisItem.invlet, "INVENTORY", false );
         }
@@ -3295,7 +3295,7 @@ bool game::load( const save_t &name )
                 _( "Finalizing" ), [&]()
                 {
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
                     const cata_path shortcuts_filename =
                     worldpath / ( name.base_path() + SAVE_EXTENSION_SHORTCUTS );
                     if( file_exist( shortcuts_filename ) ) {
@@ -3530,7 +3530,7 @@ bool game::save_player_data()
     std::ostream & fout ) {
         memorial().save( fout );
     }, _( "player memorial" ) );
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
     const bool saved_shortcuts = write_to_file( playerfile + SAVE_EXTENSION_SHORTCUTS, [&](
     std::ostream & fout ) {
         save_shortcuts( fout );
@@ -3538,7 +3538,7 @@ bool game::save_player_data()
 #endif
     const bool saved_diary = u.get_avatar_diary()->store();
     return saved_data && saved_map_memory && saved_log && saved_diary
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
            && saved_shortcuts
 #endif
            ;

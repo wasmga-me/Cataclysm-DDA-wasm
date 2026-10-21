@@ -78,7 +78,7 @@ struct input_event {
     std::string edit;
     bool edit_refresh;
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
     // Used exclusively by the quick shortcuts to determine how stale a shortcut is
     int shortcut_last_used_action_counter = 0;
 #endif

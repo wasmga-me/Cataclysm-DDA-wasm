@@ -8,7 +8,7 @@
 #include <string_view>
 #include <vector>
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
 #include <list>
 #endif
 
@@ -41,14 +41,14 @@ class input_context
 {
         friend class keybindings_ui;
     public:
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
         // Whatever's on top is our current input context.
         static std::list<input_context *> input_context_stack;
 #endif
 
         input_context() : registered_any_input( false ), category( "default" ),
             coordinate_input_received( false ), handling_coordinate_input( false ) {
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
             input_context_stack.push_back( this );
             allow_text_entry = false;
 #endif
@@ -61,14 +61,14 @@ class input_context
             : registered_any_input( false ), category( category ),
               coordinate_input_received( false ), handling_coordinate_input( false ),
               preferred_keyboard_mode( preferred_keyboard_mode ) {
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
             input_context_stack.push_back( this );
             allow_text_entry = false;
 #endif
             register_action( "toggle_language_to_en" );
         }
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
         virtual ~input_context() {
             input_context_stack.remove( this );
         }
@@ -416,7 +416,7 @@ class input_context
         input_event first_unassigned_hotkey( const hotkey_queue &queue ) const;
         input_event next_unassigned_hotkey( const hotkey_queue &queue, const input_event &prev ) const;
     private:
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
         std::vector<manual_key> registered_manual_keys;
 #endif
         std::vector<std::string> registered_actions;

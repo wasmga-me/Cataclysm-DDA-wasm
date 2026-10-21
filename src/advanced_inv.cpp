@@ -69,7 +69,7 @@
 #include "units_utility.h"
 #include "vehicle.h"
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
 #   include <SDL_keyboard.h>
 #endif
 

@@ -223,6 +223,8 @@ options_manager::options_manager()
 
 #if defined(__ANDROID__)
     pages_.emplace_back( "android", to_translation( "Android" ) );
+#elif defined(EMSCRIPTEN)
+    pages_.emplace_back( "android", to_translation( "Touch screen" ) );
 #endif
 
     enable_json( "DEFAULT_REGION" );
@@ -2661,6 +2663,9 @@ void options_manager::add_options_graphics()
         // Borderless window is bad for debugging in Visual Studio
 #if defined(_MSC_VER)
         "maximized", COPT_CURSES_HIDE
+#elif defined(EMSCRIPTEN)
+        // The page the game runs in owns full screen.
+        "no", COPT_ALWAYS_HIDE
 #else
         "windowedbl", COPT_CURSES_HIDE
 #endif
@@ -2904,11 +2909,23 @@ void options_manager::add_options_debug()
 
 void options_manager::add_options_android()
 {
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
     const auto add_empty_line = [&]() {
         this->add_empty_line( "android" );
     };
 
+#if defined(EMSCRIPTEN)
+    // The touch controls read these; a browser has no Back button, native menus or
+    // keyboard to manage, and the keyboard must keep typing for the game.
+    add( "ANDROID_TRAP_BACK_BUTTON", "android", to_translation( "Trap Back button" ),
+         to_translation( "Trap Back button" ), true, COPT_ALWAYS_HIDE );
+    add( "ANDROID_NATIVE_UI", "android", to_translation( "Use native Android UI menus" ),
+         to_translation( "Use native Android UI menus" ), false, COPT_ALWAYS_HIDE );
+    add( "ANDROID_AUTO_KEYBOARD", "android", to_translation( "Auto-manage virtual keyboard" ),
+         to_translation( "Auto-manage virtual keyboard" ), false, COPT_ALWAYS_HIDE );
+    add( "ANDROID_KEYBOARD_SCREEN_SCALE", "android", to_translation( "Virtual keyboard screen scale" ),
+         to_translation( "Virtual keyboard screen scale" ), false, COPT_ALWAYS_HIDE );
+#else
     add( "ANDROID_QUICKSAVE", "android", to_translation( "Quicksave on app lose focus" ),
          to_translation( "If true, quicksave whenever the app loses focus (screen locked, app moved into background etc.)  WARNING: Experimental.  This may result in corrupt save games." ),
          false
@@ -2943,6 +2960,7 @@ void options_manager::add_options_android()
              true
            );
     } );
+#endif
 
     add_empty_line();
 

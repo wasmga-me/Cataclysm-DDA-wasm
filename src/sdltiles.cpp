@@ -91,7 +91,9 @@ std::unique_ptr<cataimgui::client> imclient;
 
 #if defined(__ANDROID__)
 #include <jni.h>
+#endif
 
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
 #include "action.h"
 #include "inventory.h"
 #include "map.h"
@@ -136,7 +138,7 @@ static SDL_Renderer_Ptr renderer;
 static SDL_PixelFormat_Ptr format;
 static SDL_Texture_Ptr display_buffer;
 static GeometryRenderer_Ptr geometry;
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
 static SDL_Texture_Ptr touch_joystick;
 #endif
 static int WindowWidth;        //Width of the actual window, not the curses window
@@ -322,6 +324,10 @@ static void WinCreate()
                                       window_flags
                                     ) );
     throwErrorIf( !::window, "SDL_CreateWindow failed" );
+#if defined(EMSCRIPTEN)
+    // Touches drive the touch controls below, as on Android, and make no mouse events.
+    SDL_SetHint( SDL_HINT_TOUCH_MOUSE_EVENTS, "0" );
+#endif
 
 #if !defined(__ANDROID__) && !defined(EMSCRIPTEN)
     // On Android SDL seems janky in windowed mode so we're fullscreen all the time.
@@ -407,7 +413,8 @@ static void WinCreate()
         || window_flags & SDL_WINDOW_MAXIMIZED ) {
         SDL_GetWindowSize( ::window.get(), &WindowWidth, &WindowHeight );
     }
-
+#endif
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
     // Load virtual joystick texture
     touch_joystick = CreateTextureFromSurface( renderer, load_image( "android/joystick.png" ) );
 #endif
@@ -443,7 +450,7 @@ static void WinCreate()
 
 static void WinDestroy()
 {
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
     touch_joystick.reset();
 #endif
     imclient.reset();
@@ -463,12 +470,17 @@ static const SDL_Color &color_as_sdl( const unsigned char color )
     return windowsPalette[color];
 }
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
 void draw_terminal_size_preview();
 void draw_quick_shortcuts();
 void draw_virtual_joystick();
 
+#if defined(EMSCRIPTEN)
+// Shown from the first touch on, so a game played with a mouse has none.
+static bool quick_shortcuts_enabled = false;
+#else
 static bool quick_shortcuts_enabled = true;
+#endif
 
 // For previewing the terminal size with a transparent rectangle overlay when user is adjusting it in the settings
 static int preview_terminal_width = -1;
@@ -481,6 +493,7 @@ extern "C" {
     static bool has_visible_display_frame = false;
     static SDL_Rect visible_display_frame;
 
+#if defined(__ANDROID__)
     JNIEXPORT void JNICALL Java_org_libsdl_app_SDLActivity_onNativeVisibleDisplayFrameChanged(
         JNIEnv *env, jclass jcls, jint left, jint top, jint right, jint bottom )
     {
@@ -493,6 +506,7 @@ extern "C" {
         visible_display_frame.w = right - left;
         visible_display_frame.h = bottom - top;
     }
+#endif
 
 } // "C"
 
@@ -505,7 +519,12 @@ SDL_Rect get_android_render_rect( float DisplayBufferWidth, float DisplayBufferH
     float DisplayBufferAspect = DisplayBufferWidth / static_cast<float>( DisplayBufferHeight );
     float WindowHeightLessShortcuts = static_cast<float>( WindowHeight );
     if( !get_option<bool>( "ANDROID_SHORTCUT_OVERLAP" ) && quick_shortcuts_enabled ) {
+#if defined(EMSCRIPTEN)
+        // In CSS pixels: the sizes are authored for 3x screens (see get_quick_shortcut_dimensions).
+        WindowHeightLessShortcuts -= std::floor( get_option<int>( "ANDROID_SHORTCUT_HEIGHT" ) / 3.0f );
+#else
         WindowHeightLessShortcuts -= get_option<int>( "ANDROID_SHORTCUT_HEIGHT" );
+#endif
     }
     float WindowAspect = WindowWidth / static_cast<float>( WindowHeightLessShortcuts );
     if( WindowAspect < DisplayBufferAspect ) {
@@ -549,16 +568,18 @@ void refresh_display()
     // there, present it, select the buffer as target again.
     SetRenderTarget( renderer, nullptr );
     ClearScreen();
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
     SDL_Rect dstrect = get_android_render_rect( TERMINAL_WIDTH * fontwidth,
                        TERMINAL_HEIGHT * fontheight );
-    RenderCopy( renderer, display_buffer, NULL, &dstrect );
+    RenderCopy( renderer, display_buffer, nullptr, &dstrect );
 #else
     RenderCopy( renderer, display_buffer, nullptr, nullptr );
 #endif
 
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
 #if defined(__ANDROID__)
     draw_terminal_size_preview();
+#endif
     if( g ) {
         draw_quick_shortcuts();
     }
@@ -1819,17 +1840,36 @@ static input_event sdl_keysym_to_keycode_evt( const SDL_Keysym &keysym )
     return evt;
 }
 
+#if defined(EMSCRIPTEN)
+// Set when the shortcut bar shows or hides: the terminal takes its room, or gives it back.
+static bool terminal_needs_fit = false;
+#endif
+
 bool handle_resize( int w, int h )
 {
+#if defined(EMSCRIPTEN)
+    if( w == WindowWidth && h == WindowHeight && !terminal_needs_fit ) {
+        return false;
+    }
+    terminal_needs_fit = false;
+#else
     if( w == WindowWidth && h == WindowHeight ) {
         return false;
     }
+#endif
     WindowWidth = w;
     WindowHeight = h;
+    int terminal_h = WindowHeight;
+#if defined(EMSCRIPTEN)
+    if( !get_option<bool>( "ANDROID_SHORTCUT_OVERLAP" ) && quick_shortcuts_enabled ) {
+        // In CSS pixels, as in get_android_render_rect.
+        terminal_h -= std::floor( get_option<int>( "ANDROID_SHORTCUT_HEIGHT" ) / 3.0f );
+    }
+#endif
     // A minimal window size is set during initialization, but some platforms ignore
     // the minimum size so we clamp the terminal size here for extra safety.
     TERMINAL_WIDTH = std::max( WindowWidth / fontwidth / scaling_factor, EVEN_MINIMUM_TERM_WIDTH );
-    TERMINAL_HEIGHT = std::max( WindowHeight / fontheight / scaling_factor, EVEN_MINIMUM_TERM_HEIGHT );
+    TERMINAL_HEIGHT = std::max( terminal_h / fontheight / scaling_factor, EVEN_MINIMUM_TERM_HEIGHT );
     need_invalidate_framebuffers = true;
     catacurses::stdscr = catacurses::newwin( TERMINAL_HEIGHT, TERMINAL_WIDTH, point::zero );
     throwErrorIf( !SetupRenderTarget(), "SetupRenderTarget failed" );
@@ -1881,7 +1921,7 @@ void toggle_fullscreen_window()
     fullscreen = !fullscreen;
 }
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
 static float finger_down_x = -1.0f; // in pixels
 static float finger_down_y = -1.0f; // in pixels
 static float finger_curr_x = -1.0f; // in pixels
@@ -1911,8 +1951,39 @@ static bool is_quick_shortcut_touch = false;
 static bool quick_shortcuts_toggle_handled = false;
 // the current finger repeat delay - will be somewhere between the min/max values depending on user input
 uint32_t finger_repeat_delay = 500;
+#if defined(__ANDROID__)
 // should we make sure the sdl surface is visible? set to true whenever the SDL window is shown.
 static bool needs_sdl_surface_visibility_refresh = true;
+#endif
+
+#if defined(EMSCRIPTEN)
+// Whether the player has touched the screen yet.
+static bool touch_seen = false;
+// The browser's ids of the fingers on the screen, by finger number.
+static std::array<SDL_FingerID, 3> touch_fingers = { -1, -1, -1 };
+
+// A touch event's finger number: 0 for the first finger down, 1 and 2 for the next; 3 for others.
+static SDL_FingerID touch_finger_number( const SDL_Event &ev )
+{
+    for( size_t i = 0; i < touch_fingers.size(); i++ ) {
+        if( touch_fingers[i] == ev.tfinger.fingerId ) {
+            if( ev.type == SDL_FINGERUP ) {
+                touch_fingers[i] = -1;
+            }
+            return i;
+        }
+    }
+    if( ev.type == SDL_FINGERDOWN ) {
+        for( size_t i = 0; i < touch_fingers.size(); i++ ) {
+            if( touch_fingers[i] == -1 ) {
+                touch_fingers[i] = ev.tfinger.fingerId;
+                return i;
+            }
+        }
+    }
+    return touch_fingers.size();
+}
+#endif
 
 // Quick shortcuts container: maps the touch input context category (std::string) to a std::list of input_events.
 using quick_shortcuts_t = std::list<input_event>;
@@ -1933,6 +2004,13 @@ std::string get_quick_shortcut_name( const std::string &category )
     return category;
 }
 
+#if defined(EMSCRIPTEN)
+// The window is in CSS pixels, which are density-independent already.
+float android_get_display_density()
+{
+    return 1.0f;
+}
+#else
 float android_get_display_density()
 {
     JNIEnv *env = ( JNIEnv * )SDL_AndroidGetJNIEnv();
@@ -1944,6 +2022,7 @@ float android_get_display_density()
     env->DeleteLocalRef( clazz );
     return ans;
 }
+#endif
 
 // given the active quick shortcuts, returns the dimensions of each quick shortcut button.
 void get_quick_shortcut_dimensions( quick_shortcuts_t &qsl, float &border, float &width,
@@ -1973,7 +2052,7 @@ input_event *get_quick_shortcut_under_finger( bool down = false )
 {
 
     if( !quick_shortcuts_enabled ) {
-        return NULL;
+        return nullptr;
     }
 
     quick_shortcuts_t &qsl = quick_shortcuts_map[get_quick_shortcut_name(
@@ -1984,7 +2063,7 @@ input_event *get_quick_shortcut_under_finger( bool down = false )
 
     float finger_y = down ? finger_down_y : finger_curr_y;
     if( finger_y < WindowHeight - height ) {
-        return NULL;
+        return nullptr;
     }
 
     int i = 0;
@@ -2007,7 +2086,7 @@ input_event *get_quick_shortcut_under_finger( bool down = false )
         }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 // when pre-populating a quick shortcut list with defaults, ignore these actions (since they're all handleable by native touch operations)
@@ -2450,20 +2529,20 @@ void draw_virtual_joystick()
     dstrect.w = dstrect.h = ( get_option<float>( "ANDROID_DEADZONE_RANGE" ) ) * longest_window_edge * 2;
     dstrect.x = finger_down_x - dstrect.w / 2;
     dstrect.y = finger_down_y - dstrect.h / 2;
-    RenderCopy( renderer, touch_joystick, NULL, &dstrect );
+    RenderCopy( renderer, touch_joystick, nullptr, &dstrect );
 
     // Draw repeat delay range
     dstrect.w = dstrect.h = ( get_option<float>( "ANDROID_DEADZONE_RANGE" ) +
                               get_option<float>( "ANDROID_REPEAT_DELAY_RANGE" ) ) * longest_window_edge * 2;
     dstrect.x = finger_down_x - dstrect.w / 2;
     dstrect.y = finger_down_y - dstrect.h / 2;
-    RenderCopy( renderer, touch_joystick, NULL, &dstrect );
+    RenderCopy( renderer, touch_joystick, nullptr, &dstrect );
 
     // Draw current touch position (50% size of repeat delay range)
     dstrect.w = dstrect.h = dstrect.w / 2;
     dstrect.x = finger_down_x + ( finger_curr_x - finger_down_x ) / 2 - dstrect.w / 2;
     dstrect.y = finger_down_y + ( finger_curr_y - finger_down_y ) / 2 - dstrect.h / 2;
-    RenderCopy( renderer, touch_joystick, NULL, &dstrect );
+    RenderCopy( renderer, touch_joystick, nullptr, &dstrect );
 
 }
 
@@ -2595,6 +2674,21 @@ void handle_finger_input( uint32_t ticks )
     }
 }
 
+#if defined(EMSCRIPTEN)
+EM_JS( void, web_vibrate, ( int ms ), {
+    if( navigator.vibrate ) {
+        navigator.vibrate( ms );
+    }
+} );
+
+void android_vibrate()
+{
+    int vibration_ms = get_option<int>( "ANDROID_VIBRATION" );
+    if( vibration_ms > 0 && quick_shortcuts_enabled ) {
+        web_vibrate( vibration_ms );
+    }
+}
+#else
 bool android_is_hardware_keyboard_available()
 {
     JNIEnv *env = ( JNIEnv * )SDL_AndroidGetJNIEnv();
@@ -2620,6 +2714,7 @@ void android_vibrate()
         env->DeleteLocalRef( clazz );
     }
 }
+#endif
 #endif
 
 #if !defined(__ANDROID__)
@@ -2665,7 +2760,7 @@ static void CheckMessages()
     bool text_refresh = false;
     bool is_repeat = false;
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
     if( visible_display_frame_dirty ) {
         needupdate = true;
         ui_manager::redraw_invalidated();
@@ -2674,6 +2769,7 @@ static void CheckMessages()
 
     uint32_t ticks = SDL_GetTicks();
 
+#if defined(__ANDROID__)
     // Force text input mode if hardware keyboard is available.
     if( android_is_hardware_keyboard_available() && !SDL_IsTextInputActive() ) {
         StartTextInput();
@@ -2692,6 +2788,7 @@ static void CheckMessages()
         env->DeleteLocalRef( activity );
         env->DeleteLocalRef( clazz );
     }
+#endif
 
     // Copy the current input context
     if( !input_context::input_context_stack.empty() ) {
@@ -2908,6 +3005,7 @@ static void CheckMessages()
                 quick_shortcuts_toggle_handled = true;
                 refresh_display();
 
+#if defined(__ANDROID__)
                 // Display an Android toast message
                 {
                     JNIEnv *env = ( JNIEnv * )SDL_AndroidGetJNIEnv();
@@ -2920,6 +3018,9 @@ static void CheckMessages()
                     env->DeleteLocalRef( activity );
                     env->DeleteLocalRef( clazz );
                 }
+#else
+                terminal_needs_fit = true;
+#endif
             }
         }
 
@@ -2979,6 +3080,11 @@ static void CheckMessages()
     using cata::options::mouse;
 
     while( SDL_PollEvent( &ev ) ) {
+#if defined(EMSCRIPTEN)
+        if( ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION || ev.type == SDL_FINGERUP ) {
+            ev.tfinger.fingerId = touch_finger_number( ev );
+        }
+#endif
         imclient->process_input( &ev );
         switch( ev.type ) {
             case SDL_WINDOWEVENT:
@@ -3297,7 +3403,7 @@ static void CheckMessages()
                 }
                 break;
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
             case SDL_FINGERMOTION:
                 if( ev.tfinger.fingerId == 0 ) {
                     if( !is_quick_shortcut_touch ) {
@@ -3332,12 +3438,19 @@ static void CheckMessages()
                 }
                 break;
             case SDL_FINGERDOWN:
+#if defined(EMSCRIPTEN)
+                if( !touch_seen ) {
+                    touch_seen = true;
+                    quick_shortcuts_enabled = true;
+                    terminal_needs_fit = true;
+                }
+#endif
                 if( ev.tfinger.fingerId == 0 ) {
                     finger_down_x = finger_curr_x = ev.tfinger.x * WindowWidth;
                     finger_down_y = finger_curr_y = ev.tfinger.y * WindowHeight;
                     finger_down_time = ticks;
                     finger_repeat_time = 0;
-                    is_quick_shortcut_touch = get_quick_shortcut_under_finger() != NULL;
+                    is_quick_shortcut_touch = get_quick_shortcut_under_finger() != nullptr;
                     if( !is_quick_shortcut_touch ) {
                         update_finger_repeat_delay();
                     }
@@ -3472,6 +3585,7 @@ static void CheckMessages()
 
                                     quick_shortcuts_toggle_handled = true;
 
+#if defined(__ANDROID__)
                                     // Display an Android toast message
                                     {
                                         JNIEnv *env = ( JNIEnv * )SDL_AndroidGetJNIEnv();
@@ -3484,6 +3598,9 @@ static void CheckMessages()
                                         env->DeleteLocalRef( activity );
                                         env->DeleteLocalRef( clazz );
                                     }
+#else
+                                    terminal_needs_fit = true;
+#endif
                                 } else {
                                     last_input = input_event( three_tap_key, input_event_t::keyboard_char );
                                 }
@@ -3556,6 +3673,11 @@ static void CheckMessages()
         }
     }
     bool resized = false;
+#if defined(EMSCRIPTEN)
+    if( terminal_needs_fit && !resize_dims.has_value() ) {
+        resize_dims = point( WindowWidth, WindowHeight );
+    }
+#endif
     if( resize_dims.has_value() ) {
         restore_on_out_of_scope prev_last_input( last_input );
         needupdate = resized = handle_resize( resize_dims.value().x, resize_dims.value().y );
@@ -3988,11 +4110,11 @@ input_event input_manager::get_input_event( const keyboard_mode preferred_keyboa
     SDL_GetMouseState( &last_input.mouse_pos.x, &last_input.mouse_pos.y );
     if( last_input.type == input_event_t::keyboard_char ) {
         previously_pressed_key = last_input.get_first_input();
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
         android_vibrate();
 #endif
     }
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
     else if( last_input.type == input_event_t::gamepad ) {
         android_vibrate();
     }

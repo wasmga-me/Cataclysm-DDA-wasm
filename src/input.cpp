@@ -88,7 +88,7 @@ input_event::input_event( const std::set<keymod_t> &mod, const int s, const inpu
     : type( t ), modifiers( mod ), edit_refresh( false )
 {
     sequence.emplace_back( s );
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
     shortcut_last_used_action_counter = 0;
 #endif
 }
@@ -890,7 +890,7 @@ int input_manager::get_previously_pressed_key() const
 
 void input_manager::wait_for_any_key()
 {
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
     input_context ctxt( "WAIT_FOR_ANY_KEY", keyboard_mode::keycode );
 #endif
     while( true ) {

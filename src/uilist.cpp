@@ -950,7 +950,7 @@ shared_ptr_fast<uilist_impl> uilist::query( bool loop, int timeout,
 
     shared_ptr_fast<uilist_impl> ui = create_or_get_ui();
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
     for( const auto &entry : entries ) {
         if( entry.enabled && entry.hotkey.has_value()
             && entry.hotkey.value() != input_event() ) {

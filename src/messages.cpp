@@ -36,7 +36,7 @@
 #include "ui_manager.h"
 #include "viewer.h"
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
 #include <SDL_keyboard.h>
 #endif
 

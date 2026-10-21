@@ -672,6 +672,9 @@ ifeq ($(NATIVE), emscripten)
 
   # Flags that are common across compile and link phases.
   EMCC_COMMON_FLAGS = -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -sUSE_SDL_TTF=2 -sSDL2_IMAGE_FORMATS=['png'] -fexceptions
+  ifeq ($(SOUND), 1)
+    EMCC_COMMON_FLAGS += -sUSE_SDL_MIXER=2 -sSDL2_MIXER_FORMATS=['ogg']
+  endif
 
   ifneq ($(RELEASE), 1)
     EMCC_COMMON_FLAGS += -g
@@ -872,7 +875,7 @@ ifeq ($(SOUND), 1)
         LDFLAGS += -lvorbisfile -lvorbis -logg
       endif
     endif
-  else # not osx
+  else ifneq ($(NATIVE),emscripten)
     CXXFLAGS += $(shell $(PKG_CONFIG) --cflags SDL2_mixer)
     LDFLAGS += $(shell $(PKG_CONFIG) --libs SDL2_mixer)
     LDFLAGS += -lpthread

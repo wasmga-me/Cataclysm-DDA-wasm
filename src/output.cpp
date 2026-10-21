@@ -2943,7 +2943,7 @@ void insert_table( const catacurses::window &w, int pad, int line, int columns,
     int div = columns - 1;
     int offset = 0;
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
     input_context ctxt( "INSERT_TABLE" );
 #endif
     wattron( w, FG );

@@ -889,7 +889,7 @@ class game
         // Game-start procedures
         bool load( const save_t &name ); // Load a player-specific save file
         void load_master(); // Load the master data file, with factions &c
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
         void load_shortcuts( const cata_path &path );
 #endif
         bool start_game(); // Starts a new game in the active world
@@ -901,7 +901,7 @@ class game
         void serialize_master( std::ostream &fout );
         // returns false if saving failed for whatever reason
         bool save_maps();
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(EMSCRIPTEN)
         void save_shortcuts( std::ostream &fout );
 #endif
         // Data Initialization

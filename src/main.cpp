@@ -573,43 +573,11 @@ bool assure_essential_dirs_exist()
 }  // namespace
 
 #if defined(EMSCRIPTEN)
-EM_ASYNC_JS( void, mount_idbfs, (), {
-    console.log( "Mounting IDBFS for persistence..." );
-    FS.mkdir( '/home/web_user/.cataclysm-dda' );
-    FS.mount( IDBFS, {}, '/home/web_user/.cataclysm-dda' );
-    await new Promise( function( resolve, reject )
-    {
-        FS.syncfs( true, function( err ) {
-            if( err ) {
-                reject( err );
-            } else {
-                console.log( "Successfully mounted IDBFS." );
-                resolve();
-            }
-        } );
-    } );
-
-    let fsNeedsSync = false;
-    window.setFsNeedsSync = function setFsNeedsSync()
-    {
-        if( !fsNeedsSync ) {
-            requestAnimationFrame( syncFs );
-        }
-        fsNeedsSync = true;
-    };
-
-    function syncFs()
-    {
-        console.log( "Persisting to IDBFS..." );
-        FS.syncfs( false, function( err ) {
-            fsNeedsSync = false;
-            if( err ) {
-                console.error( err );
-            } else {
-                console.log( "Successfully persisted to IDBFS..." );
-            }
-        } );
-    }
+// The play page writes the player's files to the user folder before main()
+// runs and keeps them itself, so there is no IndexedDB to mount or sync.
+EM_JS( void, mount_idbfs, (), {
+    FS.mkdirTree( '/home/web_user/.cataclysm-dda' );
+    window.setFsNeedsSync = function setFsNeedsSync() {};
 } );
 #endif
 
