@@ -684,9 +684,7 @@ ifeq ($(NATIVE), emscripten)
   LDFLAGS += $(EMCC_COMMON_FLAGS)
 
   LDFLAGS += -sFORCE_FILESYSTEM
-  LDFLAGS += -sEXPORTED_RUNTIME_METHODS=['FS','callMain','stackTrace','jsStackTrace']
-  # The play page writes the game's files first, then runs main().
-  LDFLAGS += -sINVOKE_RUN=0
+  LDFLAGS += -sEXPORTED_RUNTIME_METHODS=['FS','stackTrace','jsStackTrace']
   LDFLAGS += -sINITIAL_MEMORY=512MB
   LDFLAGS += -sMAXIMUM_MEMORY=4GB
   LDFLAGS += -sALLOW_MEMORY_GROWTH

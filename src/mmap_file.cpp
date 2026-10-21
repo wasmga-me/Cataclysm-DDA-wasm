@@ -217,6 +217,9 @@ struct file_impl : mmap_file::impl {
             return false;
         }
         size_t file_size = buf.st_size;
+        if( file_size == 0 ) {
+            return false;
+        }
 
         void *map_base = mmap( nullptr, file_size, ( writeable ? PROT_WRITE : 0 ) | PROT_READ, MAP_SHARED,
                                file, 0 );
