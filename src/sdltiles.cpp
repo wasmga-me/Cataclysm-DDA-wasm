@@ -316,7 +316,13 @@ static void WinCreate()
 #endif
 #endif
 
-    ::window.reset( SDL_CreateWindow( "",
+#if defined(EMSCRIPTEN)
+    // No title: SDL would name the browser tab, which the page names.
+    const char *window_title = nullptr;
+#else
+    const char *window_title = "";
+#endif
+    ::window.reset( SDL_CreateWindow( window_title,
                                       SDL_WINDOWPOS_CENTERED_DISPLAY( display ),
                                       SDL_WINDOWPOS_CENTERED_DISPLAY( display ),
                                       WindowWidth,
@@ -510,6 +516,18 @@ extern "C" {
 
 } // "C"
 
+#if defined(EMSCRIPTEN)
+// The height the shortcut bar keeps below the terminal, in CSS pixels: the
+// sizes are authored for 3x screens (see get_quick_shortcut_dimensions).
+static int shortcut_bar_room()
+{
+    if( get_option<bool>( "ANDROID_SHORTCUT_OVERLAP" ) || !quick_shortcuts_enabled ) {
+        return 0;
+    }
+    return std::floor( get_option<int>( "ANDROID_SHORTCUT_HEIGHT" ) / 3.0f );
+}
+#endif
+
 SDL_Rect get_android_render_rect( float DisplayBufferWidth, float DisplayBufferHeight )
 {
     // If the display buffer aspect ratio is wider than the display,
@@ -517,15 +535,14 @@ SDL_Rect get_android_render_rect( float DisplayBufferWidth, float DisplayBufferH
     // by the virtual keyboard. Otherwise just center it.
     SDL_Rect dstrect;
     float DisplayBufferAspect = DisplayBufferWidth / static_cast<float>( DisplayBufferHeight );
+#if defined(EMSCRIPTEN)
+    float WindowHeightLessShortcuts = static_cast<float>( WindowHeight - shortcut_bar_room() );
+#else
     float WindowHeightLessShortcuts = static_cast<float>( WindowHeight );
     if( !get_option<bool>( "ANDROID_SHORTCUT_OVERLAP" ) && quick_shortcuts_enabled ) {
-#if defined(EMSCRIPTEN)
-        // In CSS pixels: the sizes are authored for 3x screens (see get_quick_shortcut_dimensions).
-        WindowHeightLessShortcuts -= std::floor( get_option<int>( "ANDROID_SHORTCUT_HEIGHT" ) / 3.0f );
-#else
         WindowHeightLessShortcuts -= get_option<int>( "ANDROID_SHORTCUT_HEIGHT" );
-#endif
     }
+#endif
     float WindowAspect = WindowWidth / static_cast<float>( WindowHeightLessShortcuts );
     if( WindowAspect < DisplayBufferAspect ) {
         dstrect.x = 0;
@@ -1840,31 +1857,20 @@ static input_event sdl_keysym_to_keycode_evt( const SDL_Keysym &keysym )
     return evt;
 }
 
-#if defined(EMSCRIPTEN)
-// Set when the shortcut bar shows or hides: the terminal takes its room, or gives it back.
+// Set when the shortcut bar shows or hides on the web: the terminal takes its room, or gives it back.
 static bool terminal_needs_fit = false;
-#endif
 
 bool handle_resize( int w, int h )
 {
-#if defined(EMSCRIPTEN)
     if( w == WindowWidth && h == WindowHeight && !terminal_needs_fit ) {
         return false;
     }
     terminal_needs_fit = false;
-#else
-    if( w == WindowWidth && h == WindowHeight ) {
-        return false;
-    }
-#endif
     WindowWidth = w;
     WindowHeight = h;
     int terminal_h = WindowHeight;
 #if defined(EMSCRIPTEN)
-    if( !get_option<bool>( "ANDROID_SHORTCUT_OVERLAP" ) && quick_shortcuts_enabled ) {
-        // In CSS pixels, as in get_android_render_rect.
-        terminal_h -= std::floor( get_option<int>( "ANDROID_SHORTCUT_HEIGHT" ) / 3.0f );
-    }
+    terminal_h -= shortcut_bar_room();
 #endif
     // A minimal window size is set during initialization, but some platforms ignore
     // the minimum size so we clamp the terminal size here for extra safety.
@@ -4389,9 +4395,14 @@ HWND getWindowHandle()
 
 void set_title( const std::string &title )
 {
+#if defined(EMSCRIPTEN)
+    // The page names the browser tab.
+    ( void )title;
+#else
     if( ::window ) {
         SDL_SetWindowTitle( ::window.get(), title.c_str() );
     }
+#endif
 }
 
 const SDL_Renderer_Ptr &get_sdl_renderer()
