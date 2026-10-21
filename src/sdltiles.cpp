@@ -3447,13 +3447,6 @@ static void CheckMessages()
                 }
                 break;
             case SDL_FINGERDOWN:
-#if defined(EMSCRIPTEN)
-                if( !touch_seen ) {
-                    touch_seen = true;
-                    quick_shortcuts_enabled = true;
-                    terminal_needs_fit = true;
-                }
-#endif
                 if( ev.tfinger.fingerId == 0 ) {
                     finger_down_x = finger_curr_x = ev.tfinger.x * WindowWidth;
                     finger_down_y = finger_curr_y = ev.tfinger.y * WindowHeight;
@@ -3479,6 +3472,14 @@ static void CheckMessages()
                         is_two_finger_touch = false;
                     }
                 }
+#if defined(EMSCRIPTEN)
+                // The shortcut bar shows from the first touch on; that touch was made without it.
+                if( !touch_seen ) {
+                    touch_seen = true;
+                    quick_shortcuts_enabled = true;
+                    terminal_needs_fit = true;
+                }
+#endif
                 break;
             case SDL_FINGERUP:
                 if( ev.tfinger.fingerId == 0 ) {
