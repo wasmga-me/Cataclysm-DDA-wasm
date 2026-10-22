@@ -671,13 +671,21 @@ ifeq ($(NATIVE), emscripten)
   endif
 
   # Flags that are common across compile and link phases.
-  EMCC_COMMON_FLAGS = -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -sUSE_SDL_TTF=2 -sSDL2_IMAGE_FORMATS=['png']
-  # JSPI can't suspend under the JavaScript that -fexceptions calls through.
+  # JSPI=1: the browser suspends the game while it waits (Chrome, Edge),
+  # instead of Asyncify, which triples the code. JSPI can't suspend under the
+  # JavaScript that -fexceptions calls through. -O1 with Asyncify: an -Os or
+  # -O2 link's wasm-opt runs past three hours on four cores.
   ifeq ($(JSPI), 1)
-    EMCC_COMMON_FLAGS += -fwasm-exceptions
+    EMCC_EXCEPTIONS = -fwasm-exceptions
+    EMCC_SUSPEND = -sJSPI
+    EMCC_RELEASE_LINK = -O2
   else
-    EMCC_COMMON_FLAGS += -fexceptions
+    EMCC_EXCEPTIONS = -fexceptions
+    EMCC_SUSPEND = -sASYNCIFY -sASYNCIFY_STACK_SIZE=16384
+    EMCC_RELEASE_LINK = -O1
   endif
+
+  EMCC_COMMON_FLAGS = -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -sUSE_SDL_TTF=2 -sSDL2_IMAGE_FORMATS=['png'] $(EMCC_EXCEPTIONS)
   ifeq ($(SOUND), 1)
     EMCC_COMMON_FLAGS += -sUSE_SDL_MIXER=2 -sSDL2_MIXER_FORMATS=['ogg']
   endif
@@ -695,14 +703,7 @@ ifeq ($(NATIVE), emscripten)
   LDFLAGS += -sMAXIMUM_MEMORY=4GB
   LDFLAGS += -sALLOW_MEMORY_GROWTH
   LDFLAGS += -sSTACK_SIZE=262144
-  # JSPI=1: the browser suspends the game while it waits (Chrome, Edge),
-  # instead of Asyncify, which triples the code.
-  ifeq ($(JSPI), 1)
-    LDFLAGS += -sJSPI
-  else
-    LDFLAGS += -sASYNCIFY
-    LDFLAGS += -sASYNCIFY_STACK_SIZE=16384
-  endif
+  LDFLAGS += $(EMCC_SUSPEND)
   LDFLAGS += -sENVIRONMENT=web
   LDFLAGS += -lidbfs.js
   LDFLAGS += -lembind
@@ -710,13 +711,8 @@ ifeq ($(NATIVE), emscripten)
   LDFLAGS += -sMAX_WEBGL_VERSION=2
 
   ifeq ($(RELEASE), 1)
-    # Release-mode Linker flags. -O1 with Asyncify: an -Os or -O2 link's
-    # wasm-opt runs past three hours on four cores.
-    ifeq ($(JSPI), 1)
-      LDFLAGS += -O2
-    else
-      LDFLAGS += -O1
-    endif
+    # Release-mode Linker flags.
+    LDFLAGS += $(EMCC_RELEASE_LINK)
     LDFLAGS += -sLZ4
   else
     # Debug mode linker flags.
